@@ -21,6 +21,8 @@ import Components.PluginComponent
 from Tools import Notifications
 from Tools.FuzzyDate import FuzzyTime
 from Tools.Directories import fileExists
+from ServiceReference import ServiceReference
+
 import ExpandableSelectionList
 try:
 	from Tools.StbHardware import getFPWasTimerWakeup
@@ -44,7 +46,12 @@ def calcDefaultStarttime():
 		offset = 7680
 	return (5 * 60 * 60) + offset
 
-from boxbranding import getImageDistro
+if os.path.exists("/var/lib/opkg/status"):
+	from boxbranding import getImageDistro
+else:
+	def getImageDistro():
+		return "DreamOS"
+
 #Set default configuration
 config.plugins.epgimport = ConfigSubsection()
 config.plugins.epgimport.enabled = ConfigEnableDisable(default = False)
@@ -209,16 +216,37 @@ def channelFilter(ref):
 	if "%3a//" in ref.lower():
 		# print>>log, "URL detected in serviceref, not checking fake recording on serviceref:", ref
 		return True
-	fakeRecService = NavigationInstance.instance.recordService(sref, True)
-	if fakeRecService:
-		fakeRecResult = fakeRecService.start(True)
-		NavigationInstance.instance.stopRecordService(fakeRecService)
-		# -7 (errNoSourceFound) occurs when tuner is disconnected.
-		r = fakeRecResult in (0, -7)
-		#if not r:
-		#	print>>log, "Rejected (%d): %s" % (fakeRecResult, ref) 			
-		return r
-	print>>log, "Invalid serviceref string:", ref
+	if os.path.exists("/var/lib/dpkg/status"):
+    		strref=str(ref)
+    		ssid = strref.split(":")
+    		if int(ssid[0]) == 1 and (int(ssid[6], 16) & 0xFFFF0000) == 0xEEEE0000:
+    			# convert hex stuff to integer
+    			sid=int(ssid[3],16)
+    			tsid=int(ssid[4],16)
+    			onid=int(ssid[5],16)
+    			dvbnamespace=int(ssid[6],16)
+    			if dvbnamespace > 2147483647:
+    				dvbnamespace -= 4294967296
+    			dvbnamespace_mask = int('FFFF0000', 16)
+    			if dvbnamespace_mask > 2147483647: 
+    				dvbnamespace_mask -= 4294967296
+    			searchedserv=enigma.eDVBDB.getInstance().searchReference(tsid, onid, sid, dvbnamespace, dvbnamespace_mask)
+    			channel = ServiceReference(searchedserv).getServiceName()
+    		else:
+    			channel = ServiceReference(strref).getServiceName()
+    		if len(channel) > 0:
+ 			return True
+	else:
+		fakeRecService = NavigationInstance.instance.recordService(sref, True)
+		if fakeRecService:
+			fakeRecResult = fakeRecService.start(True)
+			NavigationInstance.instance.stopRecordService(fakeRecService)
+			# -7 (errNoSourceFound) occurs when tuner is disconnected.
+			r = fakeRecResult in (0, -7)
+			#if not r:
+			#	print>>log, "Rejected (%d): %s" % (fakeRecResult, ref) 			
+			return r
+#	print>>log, "Invalid serviceref string:", ref
 	return False
 
 epgimport = EPGImport.EPGImport(enigma.eEPGCache.getInstance(), channelFilter)
@@ -235,57 +263,51 @@ def startImport():
 	epgimport.beginImport(longDescUntil = config.plugins.epgimport.longDescDays.value * 24 * 3600 + time.time())
 
 
+FHD = False
+if enigma.getDesktop(0).size().width() == 1920:
+	FHD = True
+
 ##################################
 # Configuration GUI
-HD = False
-try:
-	if enigma.getDesktop(0).size().width() >= 1280:
-		HD = True
-except:
-	pass
+#
 class EPGImportConfig(ConfigListScreen,Screen):
-	if HD:
+	if FHD:
 		skin = """
-			<screen position="center,center" size="600,500" title="EPG Import Configuration" >
-				<ePixmap name="red"    position="0,0"   zPosition="2" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
-				<ePixmap name="green"  position="140,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
-				<ePixmap name="yellow" position="280,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
-				<ePixmap name="blue"   position="420,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
-				<ePixmap position="562,0" size="35,25"  pixmap="skin_default/buttons/key_info.png" alphatest="on" />
-				<ePixmap position="562,30" size="35,25" pixmap="skin_default/buttons/key_menu.png" alphatest="on" />
-				<widget name="key_red" position="0,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;19" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_green" position="140,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;19" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_yellow" position="280,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;19" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_blue" position="420,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;19" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="config" position="10,70" size="590,320" scrollbarMode="showOnDemand" />
-				<ePixmap alphatest="on" pixmap="skin_default/icons/clock.png" position="520,483" size="14,14" zPosition="3"/>
-				<widget font="Regular;18" halign="left" position="545,480" render="Label" size="55,20" source="global.CurrentTime" transparent="1" valign="center" zPosition="3">
-					<convert type="ClockToText">Default</convert>
-				</widget>
-				<widget name="statusbar" position="10,480" size="500,20" font="Regular;18" />
-				<widget name="status" position="10,400" size="580,60" font="Regular;20" />
-			</screen>"""
+		<screen position="center,170" size="1200,820" title="EPG Import Configuration" >
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/red.svg" position="10,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/green.svg" position="305,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/yellow.svg" position="600,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/blue.svg" position="895,5" size="295,70" />
+		<widget backgroundColor="#9f1313" font="Regular;30" halign="center" name="key_red" position="10,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#1f771f" font="Regular;30" halign="center" name="key_green" position="305,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#a08500" font="Regular;30" halign="center" name="key_yellow" position="600,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#18188b" font="Regular;30" halign="center" name="key_blue" position="895,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<eLabel backgroundColor="grey" position="10,80" size="1180,1" />
+		<widget enableWrapAround="1" name="config" position="10,90" scrollbarMode="showOnDemand" size="1180,630" />
+		<eLabel backgroundColor="grey" position="10,730" size="1180,1" />
+		<widget font="Regular;32" halign="center" name="status" position="110,735" size="980,75" valign="center" />
+		<ePixmap pixmap="Default-FHD/skin_default/icons/info.svg" position="10,770" size="80,40" />
+		<ePixmap pixmap="Default-FHD/skin_default/icons/menu.svg" position="1110,770" size="80,40" />
+		</screen>"""
 	else:
 		skin = """
-			<screen position="center,center" size="600,430" title="EPG Import Configuration" >
-				<ePixmap name="red"    position="0,0"   zPosition="2" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
-				<ePixmap name="green"  position="140,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
-				<ePixmap name="yellow" position="280,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
-				<ePixmap name="blue"   position="420,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
-				<ePixmap position="562,0" size="35,25" pixmap="skin_default/buttons/key_info.png" alphatest="on" />
-				<ePixmap position="562,30" size="35,25" pixmap="skin_default/buttons/key_menu.png" alphatest="on" />
-				<widget name="key_red" position="0,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_green" position="140,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_yellow" position="280,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="key_blue" position="420,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-				<widget name="config" position="10,60" size="590,250" scrollbarMode="showOnDemand" />
-				<ePixmap alphatest="on" pixmap="skin_default/icons/clock.png" position="520,403" size="14,14" zPosition="3"/>
-				<widget font="Regular;18" halign="left" position="545,400" render="Label" size="55,20" source="global.CurrentTime" transparent="1" valign="center" zPosition="3">
-					<convert type="ClockToText">Default</convert>
-				</widget>
-				<widget name="statusbar" position="10,410" size="500,20" font="Regular;18" />
-				<widget name="status" position="10,330" size="580,60" font="Regular;20" />
-			</screen>"""
+		<screen position="center,120" size="820,520" title="EPG Import Configuration" >
+	    	<ePixmap pixmap="skin_default/buttons/red.png" position="10,5" size="200,40" />
+	     	<ePixmap pixmap="skin_default/buttons/green.png" position="210,5" size="200,40" />
+	    	<ePixmap pixmap="skin_default/buttons/yellow.png" position="410,5" size="200,40" />
+	        <ePixmap pixmap="skin_default/buttons/blue.png" position="610,5" size="200,40" />
+		<widget name="key_red" position="10,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#9f1313" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_green" position="210,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#1f771f" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_yellow" position="410,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#a08500" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	     	<widget name="key_blue" position="610,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#18188b" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<eLabel position="10,50" size="800,1" backgroundColor="grey" />
+	 	<widget name="config" position="10,60" size="800,360" enableWrapAround="1" scrollbarMode="showOnDemand" />
+	    	<eLabel position="10,435" size="800,1" backgroundColor="grey" />
+	    	<widget name="status" position="80,445" size="660,50" font="Regular;22" halign="center" valign="center"/>
+		<ePixmap pixmap="skin_default/buttons/key_info.png" position="10,488" size="50,25" />
+		<ePixmap pixmap="skin_default/buttons/key_menu.png" position="760,488" size="50,25" />
+		</screen>"""
+
 	def __init__(self, session, args = 0):
 		self.session = session
 		self.skin = EPGImportConfig.skin
@@ -316,7 +338,10 @@ class EPGImportConfig(ConfigListScreen,Screen):
 		self.createSetup()
 		self.importStatusTemplate = _("Importing: %s\n%s events")
 		self.updateTimer = enigma.eTimer()
-		self.updateTimer.callback.append(self.updateStatus)
+		if os.path.exists("/var/lib/opkg/status"):
+			self.updateTimer.callback.append(self.updateStatus)
+		else:
+			self.updateTimer_conn = self.updateTimer.timeout.connect(self.updateStatus) 
 		self.updateTimer.start(2000)
 		self.updateStatus()
 		self.onLayoutFinish.append(self.__layoutFinished)
@@ -519,21 +544,33 @@ class EPGImportConfig(ConfigListScreen,Screen):
 
 class EPGImportSources(Screen):
 	"Pick sources from config"
-	skin = """
-		<screen name="EPGImportSources" position="center,center" size="560,400" title="EPG Import Sources" >
-			<ePixmap name="red"    position="0,0"   zPosition="2" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
-			<ePixmap name="green"  position="140,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
-			<ePixmap name="yellow" position="280,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
-			<ePixmap name="blue"   position="420,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
-			<widget name="key_red" position="0,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;17" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_green" position="140,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;17" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_yellow" position="280,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;17" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_blue" position="420,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;17" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<ePixmap alphatest="on" pixmap="skin_default/icons/clock.png" position="480,383" size="14,14" zPosition="3"/>
-			<widget font="Regular;18" halign="left" position="505,380" render="Label" size="55,20" source="global.CurrentTime" transparent="1" valign="center" zPosition="3">
-				<convert type="ClockToText">Default</convert>
-			</widget>
-			<widget name="list" position="10,40" size="540,336" scrollbarMode="showOnDemand" />
+	if FHD:
+		skin = """
+		<screen position="center,170" size="1200,820" title="EPG Import Sources" >
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/red.svg" position="10,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/green.svg" position="305,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/yellow.svg" position="600,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/blue.svg" position="895,5" size="295,70" />
+		<widget backgroundColor="#9f1313" font="Regular;30" halign="center" name="key_red" position="10,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#1f771f" font="Regular;30" halign="center" name="key_green" position="305,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#a08500" font="Regular;30" halign="center" name="key_yellow" position="600,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#18188b" font="Regular;30" halign="center" name="key_blue" position="895,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<eLabel backgroundColor="grey" position="10,80" size="1180,1" />
+		<widget enableWrapAround="1" name="list" position="10,90" scrollbarMode="showOnDemand" size="1180,700" />
+		</screen>"""
+	else:
+		skin = """
+		<screen position="center,120" size="820,520" title="EPG Import Sources" >
+	    	<ePixmap pixmap="skin_default/buttons/red.png" position="10,5" size="200,40" />
+	     	<ePixmap pixmap="skin_default/buttons/green.png" position="210,5" size="200,40" />
+	    	<ePixmap pixmap="skin_default/buttons/yellow.png" position="410,5" size="200,40" />
+	        <ePixmap pixmap="skin_default/buttons/blue.png" position="610,5" size="200,40" />
+		<widget name="key_red" position="10,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#9f1313" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_green" position="210,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#1f771f" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_yellow" position="410,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#a08500" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	     	<widget name="key_blue" position="610,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#18188b" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<eLabel position="10,50" size="800,1" backgroundColor="grey" />
+	 	<widget name="list" position="10,60" size="800,450" enableWrapAround="1" scrollbarMode="showOnDemand" />
 		</screen>"""
 
 	def __init__(self, session):
@@ -562,14 +599,20 @@ class EPGImportSources(Screen):
 				tree.append(cat)
 		self["list"] = ExpandableSelectionList.ExpandableSelectionList(tree, enableWrapAround=True)
 		if tree:
-			self["key_yellow"] = Button(_("Import current source"))
+#			self["key_yellow"] = Button(_("Import current source"))
+			self["key_yellow"] = Button(_("Import"))
 		else:
 			self["key_yellow"] = Button()
+		if os.path.exists("/var/lib/opkg/status"):
+			self["key_blue"] = Button()
+		else:
+			self["key_blue"] = Button(_("Reset"))
 		self["setupActions"] = ActionMap(["SetupActions", "ColorActions"],
 		{
 			"red": self.cancel,
 			"green": self.save,
 			"yellow": self.do_import,
+			"blue": self.do_reset,
 			"save": self.save,
 			"cancel": self.cancel,
 			"ok": self["list"].toggleSelection,
@@ -601,14 +644,47 @@ class EPGImportSources(Screen):
 				if cfg["sources"] != "":
 					self.close(False, None, cfg)
 
+	def do_reset(self):
+		if os.path.exists("/var/lib/opkg/status"):
+			return
+	        from epgdb import epgdb_class
+		epgdbfile = config.misc.epgcache_filename.value                   
+		print>>log, "[EPGImport] is located at %s" % epgdbfile     
+		provider_name="Rytec XMLTV"                            
+		provider_priority=99
+		self.epg = epgdb_class(provider_name, provider_priority, epgdbfile)
+		self.epg.create_empty()
+		print>>log, "[EPGImport] loading empty epg.db"
+		self.epginstance = enigma.eEPGCache.getInstance()
+		enigma.eEPGCache.load(self.epginstance)                   
+		self.session.open(MessageBox, _("EPG database was emptied"),  MessageBox.TYPE_INFO)
+
 class EPGImportProfile(ConfigListScreen, Screen):
-	skin = """
-		<screen position="center,center" size="400,230" title="EPGImportProfile" >
-			<widget name="config" position="0,0" size="400,180" scrollbarMode="showOnDemand" />
-			<widget name="key_red" position="0,190" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;18" transparent="1"/>
-			<widget name="key_green" position="140,190" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;18" transparent="1"/>
-			<ePixmap name="red"    position="0,190"   zPosition="2" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
-			<ePixmap name="green"  position="140,190" zPosition="2" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+	if FHD:
+		skin = """
+		<screen position="center,170" size="1200,820" title="EPGImportProfile" >
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/red.svg" position="10,5" size="300,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/green.svg" position="310,5" size="300,70" />
+    		<widget backgroundColor="#9f1313" font="Regular;30" halign="center" name="key_red" position="10,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="300,70" transparent="1" valign="center" zPosition="1" />
+	    	<widget backgroundColor="#1f771f" font="Regular;30" halign="center" name="key_green" position="310,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="300,70" transparent="1" valign="center" zPosition="1" />
+	    	<widget font="Regular;34" halign="right" position="1050,25" render="Label" size="120,40" source="global.CurrentTime">
+	    	<convert type="ClockToText">Default</convert>
+	    	</widget>
+	    	<widget font="Regular;34" halign="right" position="800,25" render="Label" size="240,40" source="global.CurrentTime">
+	    	<convert type="ClockToText">Date</convert>
+	    	</widget>
+	    	<eLabel backgroundColor="grey" position="10,80" size="1180,1" />
+	    	<widget enableWrapAround="1" name="config" position="10,90" scrollbarMode="showOnDemand" size="1180,720" />
+		</screen>"""
+	else:
+		skin = """
+	 	<screen position="center,120" size="820,520" title="EPGImportProfile" >
+	    	<ePixmap pixmap="skin_default/buttons/red.png" position="10,5" size="200,40"/>
+	    	<ePixmap pixmap="skin_default/buttons/green.png" position="210,5" size="200,40"/>
+	    	<widget name="key_red" position="10,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" backgroundColor="#9f1313" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2"/>
+	    	<widget name="key_green" position="210,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" backgroundColor="#1f771f" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2"/>
+	    	<eLabel	position="10,50" size="800,1" backgroundColor="grey"/>
+	    	<widget name="config" position="10,55" size="800,450" enableWrapAround="1" scrollbarMode="showOnDemand"/>
 		</screen>"""
 
 	def __init__(self, session, args = 0):
@@ -653,21 +729,33 @@ class EPGImportProfile(ConfigListScreen, Screen):
 		self.close()
 
 class EPGImportLog(Screen):
-	skin = """
-		<screen position="center,center" size="560,400" title="EPG Import Log" >
-			<ePixmap name="red"    position="0,0"   zPosition="2" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
-			<ePixmap name="green"  position="140,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
-			<ePixmap name="yellow" position="280,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
-			<ePixmap name="blue"   position="420,0" zPosition="2" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
-			<widget name="key_red" position="0,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_green" position="140,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_yellow" position="280,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<widget name="key_blue" position="420,0" size="140,40" valign="center" halign="center" zPosition="4"  foregroundColor="white" font="Regular;20" transparent="1" shadowColor="background" shadowOffset="-2,-2" />
-			<ePixmap alphatest="on" pixmap="skin_default/icons/clock.png" position="480,383" size="14,14" zPosition="3"/>
-			<widget font="Regular;18" halign="left" position="505,380" render="Label" size="55,20" source="global.CurrentTime" transparent="1" valign="center" zPosition="3">
-				<convert type="ClockToText">Default</convert>
-			</widget>
-			<widget name="list" position="10,40" size="540,340" />
+	if FHD:
+		skin = """
+		<screen position="center,170" size="1200,820" title="EPG Import Log"  >
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/red.svg" position="10,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/green.svg" position="305,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/yellow.svg" position="600,5" size="295,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/blue.svg" position="895,5" size="295,70" />
+		<widget backgroundColor="#9f1313" font="Regular;30" halign="center" name="key_red" position="10,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#1f771f" font="Regular;30" halign="center" name="key_green" position="305,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#a08500" font="Regular;30" halign="center" name="key_yellow" position="600,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#18188b" font="Regular;30" halign="center" name="key_blue" position="895,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="295,70" transparent="1" valign="center" zPosition="1" />
+		<eLabel backgroundColor="grey" position="10,80" size="1180,1" />
+		<widget font="Regular;28" name="list" position="10,90" size="1180,720" />
+		</screen>"""
+	else:
+		skin = """
+		<screen position="center,120" size="820,520" title="EPG Import Log" >
+	    	<ePixmap pixmap="skin_default/buttons/red.png" position="10,5" size="200,40" />
+	     	<ePixmap pixmap="skin_default/buttons/green.png" position="210,5" size="200,40" />
+	    	<ePixmap pixmap="skin_default/buttons/yellow.png" position="410,5" size="200,40" />
+	        <ePixmap pixmap="skin_default/buttons/blue.png" position="610,5" size="200,40" />
+		<widget name="key_red" position="10,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#9f1313" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_green" position="210,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#1f771f" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<widget name="key_yellow" position="410,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#a08500" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	     	<widget name="key_blue" position="610,5" size="200,40" zPosition="1" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="#18188b" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+	    	<eLabel position="10,50" size="800,1" backgroundColor="grey" />
+	 	<widget font="Regular;20" name="list" position="10,60" size="800,450" />
 		</screen>"""
 	def __init__(self, session):
 		self.session = session
@@ -790,7 +878,10 @@ class checkDeepstandby:
 		self.session = session
 		if parse:
 			self.FirstwaitCheck = enigma.eTimer()
-			self.FirstwaitCheck.callback.append(self.runCheckDeepstandby)
+			if os.path.exists("/var/lib/opkg/status"):
+				self.FirstwaitCheck.callback.append(self.runCheckDeepstandby)
+			else:
+				self.FirstwaitCheck_conn = self.FirstwaitCheck.timeout.connect(self.runCheckDeepstandby)
 			self.FirstwaitCheck.startLongTimer(600)
 			print>>log, "[XMLTVImport] Wait for parse autotimers 30 sec."
 		else:
@@ -835,9 +926,15 @@ class AutoStartTimer:
 		self.prev_onlybouquet = config.plugins.epgimport.import_onlybouquet.value
 		self.prev_multibouquet = config.usage.multibouquet.value
 		self.timer = enigma.eTimer()
-		self.timer.callback.append(self.onTimer)
+		if os.path.exists("/var/lib/opkg/status"):
+			self.timer.callback.append(self.onTimer)
+		else:
+			self.timer_conn = self.timer.timeout.connect(self.onTimer) 
 		self.pauseAfterFinishImportCheck = enigma.eTimer()
-		self.pauseAfterFinishImportCheck.callback.append(self.afterFinishImportCheck)
+		if os.path.exists("/var/lib/opkg/status"):
+			self.pauseAfterFinishImportCheck.callback.append(self.afterFinishImportCheck)
+		else:
+			self.pauseAfterFinishImportCheck_conn = self.pauseAfterFinishImportCheck.timeout.connect(self.afterFinishImportCheck)
 		self.pauseAfterFinishImportCheck.startLongTimer(30)
 		self.update()
 
@@ -946,7 +1043,10 @@ class AutoStartTimer:
 						if not config.plugins.epgimport.deepstandby_afterimport.value:
 							config.plugins.epgimport.deepstandby_afterimport.value = True
 							self.wait_timer = enigma.eTimer()
-							self.wait_timer.timeout.get().append(self.startStandby)
+							if os.path.exists("/var/lib/opkg/status"):
+								self.wait_timer.timeout.get().append(self.startStandby)
+							else:
+								self.wait_timer_conn = self.wait_timer.timeout.connect(self.startStandby)
 							print>>log, "[XMLTVImport] start wait_timer (10sec) for goto standby"
 							self.wait_timer.start(10000, True)
 
@@ -1064,7 +1164,7 @@ def setExtensionsmenu(el):
 description = _("Automated EPG Importer")
 config.plugins.epgimport.showinextensions.addNotifier(setExtensionsmenu, initial_call = False, immediate_feedback = False)
 extDescriptor = PluginDescriptor(name= _("EPG-Importer"), description = description, where = PluginDescriptor.WHERE_EXTENSIONSMENU, fnc = extensionsmenu)
-pluginlist = PluginDescriptor(name=_("EPG-Importer"), description = description, where = PluginDescriptor.WHERE_PLUGINMENU, icon = 'plugin.png', fnc = main)
+pluginlist = PluginDescriptor(name=_("EPG-Importer"), description = description, where = PluginDescriptor.WHERE_PLUGINMENU, icon = 'epgimport.png', fnc = main)
 
 def epgmenu(menuid, **kwargs):
 	if getImageDistro() in ("openvix", "openbh", "ventonsupport", "egami", "openhdf", "opendroid"):

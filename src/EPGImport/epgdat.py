@@ -187,7 +187,7 @@ class epgdat_class:
 			r.append((crc32_dreambox(sres,0x4e), sres))
 		return r
 
-	def add_event(self, starttime, duration, title, description):
+	def add_event(self, starttime, duration, title, description, language=""):
 		#print "add event : ",event_starttime_unix_gmt, "title : " ,event_title
 		self.events.append((starttime, duration, self.short_desc(title[:240]), self.long_desc(description)))
 

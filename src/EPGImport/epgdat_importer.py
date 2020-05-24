@@ -1,5 +1,9 @@
-import epgdat
 import os
+import os                                                                      
+if os.path.exists("/var/lib/dpkg/status"):                                     
+        import epgdb                 
+else:                                
+        import epgdat     
 import sys
 
 import sys
@@ -24,8 +28,16 @@ class epgdatclass:
 			path='/media/usb'
 		if self.checkPath('/media/hdd'):
 			path='/media/hdd'
-		self.epgfile = os.path.join(path, 'epg_new.dat')
-		self.epg = epgdat.epgdat_class(path, settingspath, self.epgfile)
+		if os.path.exists("/var/lib/dpkg/status"):    
+    			from Components.config import config    
+    			self.epgdbfile = config.misc.epgcache_filename.value    
+    			print "[EPGDB] is located at %s" % self.epgdbfile    
+    			provider_name="Rytec XMLTV"                                                
+			provider_priority=99          
+			self.epg = epgdb.epgdb_class(provider_name, provider_priority, self.epgdbfile, config.plugins.epgimport.clear_oldepg.value)
+		else:
+			self.epgfile = os.path.join(path, 'epg_new.dat')
+			self.epg = epgdat.epgdat_class(path, settingspath, self.epgfile)
 
 	def importEvents(self, services, dataTupleList):
 		'This method is called repeatedly for each bit of data'
@@ -37,7 +49,7 @@ class epgdatclass:
 				desc = program[3] + '\n' + program[4]
 			else:
 				desc = program[4]
-			self.epg.add_event(program[0], program[1], program[2], desc)
+			self.epg.add_event(program[0], program[1], program[2], desc, program[6])
 
 	def commitService(self):
 		if self.services is not None:

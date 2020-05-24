@@ -16,4 +16,7 @@ def _(txt):
 		print "[" + PluginLanguageDomain + "] fallback to default translation for " + txt
 		return gettext.gettext(txt)
 
-language.addCallback(localeInit())
+if os.path.exists("/var/lib/opkg/status"):
+	language.addCallback(localeInit())
+else:
+	language.addCallback(localeInit)

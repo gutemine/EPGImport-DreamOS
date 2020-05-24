@@ -227,7 +227,7 @@ class EPGImport:
 			self.downloadFail(e)
 			return
 		if self.source.parser == 'epg.dat':
-			if twisted.python.runtime.platform.supportsThreads():
+			if twisted.python.runtime.platform.supportsThreads() and os.path.exists("/var/lib/opkg/status"):
 				print>>log, "[EPGImport] Using twisted thread for DAT file"
 				threads.deferToThread(self.readEpgDatFile, filename, deleteFile).addCallback(lambda ignore: self.nextImport())
 			else:
@@ -282,7 +282,7 @@ class EPGImport:
 			except Exception, e:
 				self.channelDownloadFail(e)
 				return
-		if twisted.python.runtime.platform.supportsThreads():
+		if twisted.python.runtime.platform.supportsThreads() and os.path.exists("/var/lib/opkg/status"):
 			print>>log, "[EPGImport] Using twisted thread"
 			threads.deferToThread(self.doThreadRead, filename).addCallback(lambda ignore: self.nextImport())
 			deleteFile = False # Thread will delete it

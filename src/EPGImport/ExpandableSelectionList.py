@@ -2,19 +2,40 @@ from Components.MenuList import MenuList
 from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
 from enigma import eListboxPythonMultiContent, eListbox, gFont, RT_HALIGN_LEFT
 from Tools.LoadPixmap import LoadPixmap
+from enigma import getDesktop
+FHD = False     
+if getDesktop(0).size().width() == 1920:
+        FHD = True
 
 import skin
 
-expandableIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/expandable.png"))
-expandedIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/expanded.png"))
+import os
+if os.path.exists("/var/lib/opkg/status"):
+	expandableIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/expandable.png"))
+	expandedIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/expanded.png"))
+else:
+	expandableIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "icons/expandable.png"))
+	expandedIcon = LoadPixmap(resolveFilename(SCOPE_CURRENT_SKIN, "icons/expanded.png"))
 
 def loadSettings():
 	global cat_desc_loc, entry_desc_loc, cat_icon_loc, entry_icon_loc
-	x, y, w, h = skin.parameters.get("SelectionListDescr", (25, 3, 650, 30))
+	if os.path.exists("/var/lib/opkg/status"):
+		x, y, w, h = skin.parameters.get("SelectionListDescr", (25, 3, 650, 30))
+	else:
+		if FHD:
+	                x, y, w, h = (30, 9, 1200, 50)
+	        else:
+	                x, y, w, h = (20, 3, 800, 30)
 	ind = x # Indent the entries by the same amount as the icon.
 	cat_desc_loc = (x, y, w, h)
 	entry_desc_loc = (x + ind, y, w - ind, h)
-	x, y, w, h = skin.parameters.get("SelectionListLock", (0, 2, 25, 24))
+	if os.path.exists("/var/lib/opkg/status"):
+		x, y, w, h = skin.parameters.get("SelectionListLock", (0, 2, 25, 24))
+	else:
+		if FHD:
+	                x, y, w, h = (-25, 5, 40, 40)                                   
+	        else:                                                                   
+	                x, y, w, h = (-15, 2, 25, 25)    
 	cat_icon_loc = (x, 0, w, y + y + h) # The category icon is larger
 	entry_icon_loc = (x + ind, y, w, h)
 
@@ -37,16 +58,28 @@ def entry(description, value, selected):
 		(eListboxPythonMultiContent.TYPE_TEXT,) + entry_desc_loc + (0, RT_HALIGN_LEFT, description)
 	]
 	if selected:
-		selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "icons/lock_on.png"))
+		if os.path.exists("/var/lib/opkg/status"):
+			selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "icons/lock_on.png"))
+		else:
+			selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/icons/lock_on.png"))
 	else:
-		selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "icons/lock_off.png"))
+		if os.path.exists("/var/lib/opkg/status"):
+			selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "icons/lock_off.png"))
+		else:
+			selectionpng = LoadPixmap(cached=True, path=resolveFilename(SCOPE_CURRENT_SKIN, "skin_default/icons/lock_off.png"))
 	res.append((eListboxPythonMultiContent.TYPE_PIXMAP_ALPHATEST,) + entry_icon_loc + (selectionpng,))
 	return res
 
 def expand(cat, value=True):
 	# cat is a list of data and icons
 	if cat[0][1] != value:
-		ix, iy, iw, ih = skin.parameters.get("SelectionListLock",(0, 2, 25, 24))
+		if os.path.exists("/var/lib/opkg/status"):
+			ix, iy, iw, ih = skin.parameters.get("SelectionListLock",(0, 2, 25, 24))
+		else:
+			if FHD:
+                	        ix, iy, iw, ih = (10, 5, 40, 40)                        
+                	else:                                                           
+                	        ix, iy, iw, ih = (10, 2, 25, 25)    
 		if value:
 			icon = expandedIcon
 		else:
@@ -66,7 +99,13 @@ class ExpandableSelectionList(MenuList):
 	def __init__(self, tree = None, enableWrapAround = False):
 		'tree is expected to be a list of categories'
 		MenuList.__init__(self, [], enableWrapAround, content = eListboxPythonMultiContent)
-		font = skin.fonts.get("SelectionList", ("Regular", 20, 30))
+		if os.path.exists("/var/lib/opkg/status"):
+			font = skin.fonts.get("SelectionList", ("Regular", 20, 30))
+		else:
+			if FHD:
+                   	     font = ("Regular", 28, 50)                              
+                	else:                                                           
+                	        font = ("Regular", 20, 30)      
 		self.l.setFont(0, gFont(font[0], font[1]))
 		self.l.setItemHeight(font[2])
 		self.tree = tree or []

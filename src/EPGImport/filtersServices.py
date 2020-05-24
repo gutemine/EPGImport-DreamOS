@@ -8,6 +8,7 @@ from Screens.ChannelSelection import service_types_radio, service_types_tv, Chan
 from enigma import eServiceReference, eServiceCenter, iServiceInformation
 from Components.Sources.List import List
 from Components.Label import Label
+from enigma import getDesktop
 import EPGConfig
 import os
 
@@ -102,31 +103,66 @@ class FiltersList():
 
 filtersServicesList = FiltersList()
 
+FHD = False                      
+if getDesktop(0).size().width() == 1920:
+        FHD = True  
+
 class filtersServicesSetup(Screen):
-	skin = """
-	<screen name="filtersServicesSetup" position="center,center" size="680,470" title="Ignore services list">
-		<ePixmap position="0,390" size="140,40" pixmap="skin_default/buttons/red.png" alphatest="on" />
-		<ePixmap position="170,390"  size="140,40" pixmap="skin_default/buttons/green.png"  alphatest="on" />
-		<ePixmap position="340,390" size="140,40" pixmap="skin_default/buttons/yellow.png" alphatest="on" />
-		<ePixmap position="510,390" size="140,40" pixmap="skin_default/buttons/blue.png" alphatest="on" />
-		<widget name="key_red" position="0,390" zPosition="1" size="140,40" font="Regular;17" halign="center" valign="center" backgroundColor="#9f1313" transparent="1" />
-		<widget name="key_green" position="170,390" zPosition="1" size="140,40" font="Regular;17" halign="center" valign="center" backgroundColor="#1f771f" transparent="1" />
-		<widget name="key_yellow" position="340,390" zPosition="1" size="140,40" font="Regular;17" halign="center" valign="center" backgroundColor="#a08500" transparent="1" />
-		<widget name="key_blue" position="510,390" zPosition="1" size="140,40" font="Regular;17" halign="center" valign="center" backgroundColor="#18188b" transparent="1" />
-		<widget source="list" render="Listbox" position="10,10" size="660,330" scrollbarMode="showOnDemand">
-			<convert type="TemplatedMultiContent">
-				{"template": [
-						MultiContentEntryText(pos = (10, 5), size = (420, 23), font = 0, flags = RT_HALIGN_LEFT, text = 0),
-						MultiContentEntryText(pos = (50, 25), size = (380, 20), font = 1, flags = RT_HALIGN_LEFT, text = 1),
-						MultiContentEntryText(pos = (100, 47), size = (400, 17), font = 2, flags = RT_HALIGN_LEFT, text = 2),
-					],
-				 "fonts": [gFont("Regular", 21), gFont("Regular", 19), gFont("Regular", 16)],
-				 "itemHeight": 65
-				}
-			</convert>
+	if FHD:
+		skin = """
+		<screen name="filtersServicesSetup" position="center,170" size="1280,820" title="Ignore services list">
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/red.svg" position="10,5" size="315,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/green.svg" position="325,5" size="315,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/yellow.svg" position="640,5" size="315,70" />
+		<ePixmap pixmap="Default-FHD/skin_default/buttons/blue.svg" position="955,5" size="315,70" />
+		<widget backgroundColor="#9f1313" font="Regular;24" halign="center" name="key_red" position="10,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="315,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#1f771f" font="Regular;24" halign="center" name="key_green" position="325,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="315,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#a08500" font="Regular;24" halign="center" name="key_yellow" position="640,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="315,70" transparent="1" valign="center" zPosition="1" />
+		<widget backgroundColor="#18188b" font="Regular;24" halign="center" name="key_blue" position="955,5" foregroundColor="white" shadowColor="black" shadowOffset="-2,-2" size="315,70" transparent="1" valign="center" zPosition="1" />
+		<eLabel backgroundColor="grey" position="10,80" size="1260,1" />
+		<widget source="list" render="Listbox" position="20,90" size="1240,625" scrollbarMode="showOnDemand">
+		<convert type="TemplatedMultiContent">
+			{"template": [
+				MultiContentEntryText(pos = (20, 5), size = (420, 33), font = 0, flags = RT_HALIGN_LEFT, text = 0),
+				MultiContentEntryText(pos = (100, 45), size = (380, 30), font = 1, flags = RT_HALIGN_LEFT, text = 1),
+				MultiContentEntryText(pos = (200, 87), size = (400, 27), font = 2, flags = RT_HALIGN_LEFT, text = 2),
+			],
+			 "fonts": [gFont("Regular", 31), gFont("Regular", 29), gFont("Regular", 26)],
+			 "itemHeight": 125
+			}
+		</convert>
 		</widget>
-		<widget name="introduction" position="0,440" size="680,30" font="Regular;20" halign="center" valign="center" />
-	</screen>"""
+		<eLabel backgroundColor="grey" position="10,730" size="1260,1" />
+		<widget name="introduction" position="20,750" size="1240,50" font="Regular;24" halign="center" valign="center" />
+		</screen>"""
+	else:
+		skin = """
+		<screen name="filtersServicesSetup" position="center,120" size="820,520" title="Ignore services list">
+    		<ePixmap pixmap="skin_default/buttons/red.png" position="10,5" size="200,40" />
+     		<ePixmap pixmap="skin_default/buttons/green.png" position="210,5" size="200,40" />
+    		<ePixmap pixmap="skin_default/buttons/yellow.png" position="410,5" size="200,40" />
+        	<ePixmap pixmap="skin_default/buttons/blue.png" position="610,5" size="200,40" />
+	    	<widget name="key_red" position="10,5" size="200,40" zPosition="1" font="Regular;16" halign="center" valign="center" foregroundColor="white" backgroundColor="#9f1313" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+    		<widget name="key_green" position="210,5" size="200,40" zPosition="1" font="Regular;16" halign="center" valign="center" foregroundColor="white" backgroundColor="#1f771f" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+    		<widget name="key_yellow" position="410,5" size="200,40" zPosition="1" font="Regular;16" halign="center" valign="center" foregroundColor="white" backgroundColor="#a08500" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+     		<widget name="key_blue" position="610,5" size="200,40" zPosition="1" font="Regular;16" halign="center" valign="center" foregroundColor="white" backgroundColor="#18188b" transparent="1" shadowColor="black" shadowOffset="-2,-2" />
+    		<eLabel position="10,50" size="800,1" backgroundColor="grey" />
+		<widget source="list" render="Listbox" position="10,60" size="800,390" scrollbarMode="showOnDemand">
+		<convert type="TemplatedMultiContent">
+			{"template": [
+				MultiContentEntryText(pos = (10, 5), size = (420, 23), font = 0, flags = RT_HALIGN_LEFT, text = 0),
+				MultiContentEntryText(pos = (50, 25), size = (380, 20), font = 1, flags = RT_HALIGN_LEFT, text = 1),
+				MultiContentEntryText(pos = (100, 47), size = (400, 17), font = 2, flags = RT_HALIGN_LEFT, text = 2),
+				],
+			 "fonts": [gFont("Regular", 21), gFont("Regular", 19), gFont("Regular", 16)],
+			 "itemHeight": 65
+			}
+		</convert>
+		</widget>
+    		<eLabel position="10,460" size="800,1" backgroundColor="grey" />
+		<widget name="introduction" position="10,475" size="800,30" font="Regular;20" halign="center" valign="center" />
+		</screen>"""
+
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		self.RefList = filtersServicesList
