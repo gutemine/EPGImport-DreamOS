@@ -25,6 +25,7 @@ from __future__ import division
 # 20190518 r27 add check_epgdb
 # 20200316 r28 split description for extended
 # 20200404 r29 python3 compatibility
+# 20200611 r30 retry connect only once, but wait while epg.db is growing
 
 from os import path as os_path, remove as os_remove
 import time
@@ -69,11 +70,12 @@ class epgdb_class:
 			self.epgdb_path=config.misc.epgcache_filename.value
 		else:
 			self.epgdb_path=epgdb_path
+		self.ProcessingTimer = eTimer()                                                 
+		if os_path.exists("/var/lib/dpkg/status"):                                      
+			self.ProcessingTimer_conn = self.ProcessingTimer.timeout.connect(self.start_process)
+		else:                                                                           
+		        self.ProcessingTimer.callback.append(self.start_process)                
 		self.connection = None
-		self.started=False
-		self.trial=0
-  		self.StartingTimer = eTimer()
-                self.StartingTimer_conn = self.StartingTimer.timeout.connect(self.start_process)
 		if clear_oldepg:
 			self.create_empty()
 			self.size=os_path.getsize(self.epgdb_path) # to continue immediately
@@ -82,7 +84,7 @@ class epgdb_class:
 			self.epginstance = eEPGCache.getInstance()
 			# epg saving will notify when finished ...
 			self.cacheState_conn = self.epginstance.cacheState.connect(self.cacheStateChanged)
-			cprint("saving EPG to %s" % self.epgdb_path)
+			cprint("SAVING EPG: %s" % self.epgdb_path)
 			if os_path.exists(self.epgdb_path):
 				os_remove(self.epgdb_path)
 			self.size=0
@@ -91,31 +93,28 @@ class epgdb_class:
 	def cacheStateChanged(self, state):
 		if state.state == cachestate.save_finished:
 			cprint("SAVED")
-			self.start_process()
+		        self.ProcessingTimer.start(5000, True)                                 
+			#self.start_process()  
 
 	def start_process(self):
 		cprint("START PROCESSING")
-		retry=True
 		if os_path.exists(self.epgdb_path):
 			size=os_path.getsize(self.epgdb_path)
 			# even empty epg.db has at least 23k size
 	       		min_size = 23*1024
 			if size < min_size:
 				cprint("%s too small" % self.epgdb_path)
+				return False
 			else:
 				if size != self.size:
-					cprint("size %d >>> %d changed" % (self.size,size))
+					cprint("SIZE %d >>> %d changed" % (self.size,size))
 					self.size=size
-				else:
-					retry=False
+				        self.ProcessingTimer.start(5000, True)                                 
+					return True
 		else:
-			cprint("%s not found" % self.epgdb_path)
-		if retry:
-			self.trial+=1
-			cprint("TRY %d" % self.trial)
-	        	self.StartingTimer.start(100, True)
-			return
-		cprint("%s SAVE FINISHED TRY %d SIZE %d" % (self.epgdb_path, self.trial, self.size))
+			cprint("%s NOT FOUND" % self.epgdb_path)
+			return False
+		cprint("%s SAVE FINISHED SIZE %d" % (self.epgdb_path, self.size))
 		if self.connection is not None:
 			cprint("%s CONNECTED ALREADY" % self.epgdb_path)
 			return True
@@ -148,10 +147,10 @@ class epgdb_class:
 			# begin transaction  ....
 			self.cursor.execute('BEGIN')
 			cprint("CONNNECT %s FINISHED" % self.epgdb_path)
-			self.started=True
+			return True
 		except:
 			cprint("CONNECT %s FAILED" % self.epgdb_path)
-			self.started=False
+			return False
 
 	def set_excludedsid(self,exsidlist):
 		self.EXCLUDED_SID=exsidlist
@@ -160,13 +159,15 @@ class epgdb_class:
 		self.events.append((starttime, duration, title[:240], description, language))
 
 	def preprocess_events_channel(self, services=None):
+                if self.connection is None:
+                        cprint("NOT YET CONNECTED")
+			self.size=os_path.getsize(self.epgdb_path) # to continue immediately
+                        self.start_process()
 		if services is None:
 			# reset event container
 			self.events=[]
 			return
-		while not self.started:
-			cprint("NOT CONNECTED, waiting ...")
-			time.sleep(1)
+#               cprint("EVENTS: %d" % len(self.events))
 		# one local cursor per table seems to perform slightly better ...
 		cursor_service = self.connection.cursor()
 		cursor_event = self.connection.cursor()
